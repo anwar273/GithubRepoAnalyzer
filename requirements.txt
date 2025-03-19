@@ -3,3 +3,4 @@ matplotlib
 fpdf
 requests
 logging
+langchain-community
