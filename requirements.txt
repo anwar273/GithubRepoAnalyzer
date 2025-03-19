@@ -1,6 +1,5 @@
 streamlit
 matplotlib
-seaborn
 re
 base64
 datetime
