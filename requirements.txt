@@ -1,2 +1,5 @@
 streamlit
 matplotlib
+fpdf
+requests
+logging
