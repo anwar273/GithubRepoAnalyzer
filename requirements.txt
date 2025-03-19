@@ -4,3 +4,4 @@ fpdf
 requests
 logging
 langchain-community
+markdown
