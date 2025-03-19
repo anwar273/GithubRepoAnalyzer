@@ -7,7 +7,6 @@ import json
 import uuid
 import pandas as pd
 import matplotlib.pyplot as plt
-import seaborn as sns
 import time
 import re
 import base64
