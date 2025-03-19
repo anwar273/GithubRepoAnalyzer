@@ -5,3 +5,4 @@ requests
 logging
 langchain-community
 markdown
+openai
