@@ -7,6 +7,7 @@ import json
 import uuid
 import pandas as pd
 import matplotlib.pyplot as plt
+import seaborn as sns
 import time
 import re
 import base64
@@ -14,18 +15,19 @@ from datetime import datetime
 from git import Repo
 from fpdf import FPDF
 import requests
-from langchain_community.llms import OpenAI
-from langchain_core.callbacks import StreamingStdOutCallbackHandler
-from langchain_core.prompts import PromptTemplate
-from langchain.chains import LLMChain
-from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
-from langchain.chains import LLMChain
-from langchain.prompts import PromptTemplate
-import markdown
+#from langchain_community.llms import OpenAI
+#from langchain_core.callbacks import StreamingStdOutCallbackHandler
+#from langchain_core.prompts import PromptTemplate
+#from langchain.chains import LLMChain
+#from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
+#from langchain.chains import LLMChain
+#from langchain.prompts import PromptTemplate
+#import markdown
 import yaml
 from pathlib import Path
 import zipfile
 import logging
+from mistral_llm import MistralLLM
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -216,6 +218,52 @@ class AnthropicProvider(LLMProvider):
             st.error(f"Error calling Anthropic API: {str(e)}")
             return None
 
+class MistralProvider(LLMProvider):
+    """Mistral API provider"""
+    def __init__(self, api_key, model="mistral-large-latest"):
+        super().__init__()
+        self.api_key = api_key
+        self.model = model
+        self.base_url = "https://api.mistral.ai/v1"
+        
+        try:
+            self.client = requests.Session()
+            self.client.headers.update({
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            })
+            
+            # Verify API key validity
+            response = self.client.get(f"{self.base_url}/models")
+            if response.status_code != 200:
+                st.error(f"Failed to connect to Mistral API: {response.text}")
+                self.client = None
+        except Exception as e:
+            st.error(f"Error initializing Mistral client: {str(e)}")
+            self.client = None
+    
+    def analyze_text(self, prompt, max_tokens=1000):
+        try:
+            response = self.client.post(
+                f"{self.base_url}/chat/completions",
+                json={
+                    "model": self.model,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.7,
+                    "max_tokens": max_tokens,
+                    "top_p": 1,
+                    "stream": False
+                }
+            )
+            
+            if response.status_code == 200:
+                return response.json()['choices'][0]['message']['content']
+            else:
+                st.error(f"Mistral API Error: {response.text}")
+                return None
+        except Exception as e:
+            st.error(f"Error calling Mistral API: {str(e)}")
+            return None
 
 class RepositoryHandler:
     """Handle GitHub repository operations"""
@@ -382,7 +430,7 @@ class VulnerabilityScanner:
             logger.error(f"Error analyzing file {file_path}: {str(e)}")
             return []
     
-    def scan_repository(self, max_files=50):
+    def scan_repository(self, max_files=1000):
         """Scan the repository for vulnerabilities"""
         try:
             file_list = self.get_file_list()
@@ -922,12 +970,13 @@ Total vulnerabilities found: {len(self.vulnerabilities)}
 with tab1:
     st.header("1. LLM Provider Setup")
     
-    # LLM Provider Selection
-    llm_option = st.radio("Select LLM Provider", ["Ollama (Local)", "OpenAI API", "Anthropic API"])
+    # LLM Provider Selection - Update the radio button
+    llm_option = st.radio("Select LLM Provider", 
+                         ["Ollama (Local)", "OpenAI API", "Anthropic API", "Mistral API"])
     
     if llm_option == "Ollama (Local)":
         st.subheader("Ollama Setup")
-        model_name = st.text_input("Model Name", "llama2")
+        model_name = st.text_input("Model Name", "deepseek-r1:latest")
         
         if st.button("Connect to Ollama"):
             with st.spinner("Connecting to Ollama..."):
@@ -969,6 +1018,27 @@ with tab1:
                         st.session_state.current_step = 2
                     else:
                         st.error("Failed to connect to Anthropic API.")
+            else:
+                st.error("Please enter an API key.")
+    
+    elif llm_option == "Mistral API":
+        st.subheader("Mistral Setup")
+        api_key = st.text_input("API Key", type="password")
+        model = st.selectbox("Model", [
+            "mistral-large-latest",
+            "mistral-medium-latest",
+            "mistral-small-latest"
+        ])
+        
+        if st.button("Connect to Mistral"):
+            if api_key:
+                with st.spinner("Connecting to Mistral..."):
+                    st.session_state.llm_provider = MistralProvider(api_key, model)
+                    if st.session_state.llm_provider.client:
+                        st.success("Connected to Mistral successfully!")
+                        st.session_state.current_step = 2
+                    else:
+                        st.error("Failed to connect to Mistral API.")
             else:
                 st.error("Please enter an API key.")
     
